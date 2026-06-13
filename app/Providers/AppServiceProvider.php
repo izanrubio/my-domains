@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Services\Scanning\Checks\BlacklistCheck;
 use App\Services\Scanning\Checks\DnsCheck;
 use App\Services\Scanning\Checks\EmailSecurityCheck;
 use App\Services\Scanning\Checks\HttpHeadersCheck;
@@ -26,6 +27,7 @@ class AppServiceProvider extends ServiceProvider
                 $app->make(SslCheck::class),
                 $app->make(EmailSecurityCheck::class),
                 $app->make(HttpHeadersCheck::class),
+                $app->make(BlacklistCheck::class),
             ]);
         });
     }
