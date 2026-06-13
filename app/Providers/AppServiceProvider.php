@@ -6,6 +6,7 @@ use App\Services\Scanning\Checks\BlacklistCheck;
 use App\Services\Scanning\Checks\DnsCheck;
 use App\Services\Scanning\Checks\EmailSecurityCheck;
 use App\Services\Scanning\Checks\HttpHeadersCheck;
+use App\Services\Scanning\Checks\ReachabilityCheck;
 use App\Services\Scanning\Checks\SslCheck;
 use App\Services\Scanning\Contracts\CertFetcherInterface;
 use App\Services\Scanning\Contracts\DohResolverInterface;
@@ -28,6 +29,7 @@ class AppServiceProvider extends ServiceProvider
                 $app->make(EmailSecurityCheck::class),
                 $app->make(HttpHeadersCheck::class),
                 $app->make(BlacklistCheck::class),
+                $app->make(ReachabilityCheck::class),
             ]);
         });
     }
