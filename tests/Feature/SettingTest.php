@@ -74,4 +74,44 @@ class SettingTest extends TestCase
             ->assertUnprocessable()
             ->assertJsonValidationErrors('expiry_alert_days');
     }
+
+    public function test_full_payload_persists_and_token_round_trips_encrypt_decrypt(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAs($user)->putJson('/api/settings', [
+            'cloudflare_api_token' => 'plaintext-token-xyz',
+            'alert_email'          => 'watch@example.com',
+            'expiry_alert_days'    => 14,
+        ])->assertOk();
+
+        $fresh = $user->fresh();
+        // Row exists in DB and values persisted
+        $this->assertSame('watch@example.com', $fresh->getSetting('alert_email'));
+        $this->assertSame('14', $fresh->getSetting('expiry_alert_days'));
+        // Token round-trips through Crypt: getSetting returns plaintext
+        $this->assertSame('plaintext-token-xyz', $fresh->getSetting('cloudflare_api_token'));
+    }
+
+    public function test_token_only_payload_succeeds_and_persists(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAs($user)->putJson('/api/settings', [
+            'cloudflare_api_token' => 'only-token-no-other-fields',
+        ])->assertOk();
+
+        $this->assertSame('only-token-no-other-fields', $user->fresh()->getSetting('cloudflare_api_token'));
+        // Absent fields must not be written (no row or still null)
+        $this->assertNull($user->fresh()->getSetting('alert_email'));
+    }
+
+    public function test_validation_rejects_expiry_days_above_maximum(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAs($user)->putJson('/api/settings', ['expiry_alert_days' => 366])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('expiry_alert_days');
+    }
 }

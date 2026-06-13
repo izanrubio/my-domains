@@ -7,10 +7,15 @@ export default function Settings() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
+  const [isError, setIsError] = useState(false)
 
   useEffect(() => {
     client.get('/settings').then(({ data }) => {
-      setSettings(data)
+      setSettings({
+        ...data,
+        // normalize null → default so the submit payload is always valid
+        expiry_alert_days: data.expiry_alert_days ?? 30,
+      })
       setToken('')
     }).finally(() => setLoading(false))
   }, [])
@@ -19,18 +24,27 @@ export default function Settings() {
     e.preventDefault()
     setSaving(true)
     setMsg('')
+    setIsError(false)
     try {
-      const payload = {
-        expiry_alert_days: Number(settings.expiry_alert_days),
-        alert_email: settings.alert_email,
-      }
+      const payload = {}
+
+      // Only include token when the user typed a new one
       if (token) payload.cloudflare_api_token = token
+
+      // Only include email when it has a value (partial updates are fine)
+      if (settings.alert_email) payload.alert_email = settings.alert_email
+
+      // Always send threshold as a valid integer (default 30 if somehow empty)
+      const days = parseInt(settings.expiry_alert_days, 10)
+      payload.expiry_alert_days = days > 0 ? days : 30
+
       await client.put('/settings', payload)
       setToken('')
       setMsg('Settings saved.')
     } catch (err) {
-      const msgs = err.response?.data?.errors
-      setMsg(msgs ? Object.values(msgs).flat().join(', ') : 'Save failed.')
+      setIsError(true)
+      const errs = err.response?.data?.errors
+      setMsg(errs ? Object.values(errs).flat().join(' ') : 'Save failed.')
     } finally {
       setSaving(false)
     }
@@ -43,7 +57,10 @@ export default function Settings() {
       <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
 
       {msg && (
-        <div className={`text-sm rounded-lg p-3 ${msg.includes('failed') ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}>
+        <div
+          role={isError ? 'alert' : 'status'}
+          className={`text-sm rounded-lg p-3 ${isError ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}
+        >
           {msg}
         </div>
       )}
