@@ -54,4 +54,37 @@ class WhoisServiceTest extends TestCase
         $this->assertSame(2025, $result->year);
         $this->assertSame(12, $result->month);
     }
+
+    public function test_returns_null_when_whois_response_has_no_expiry_date(): void
+    {
+        // Simulates registries (e.g. Red.es for .es domains) that respond to WHOIS
+        // but do not expose an expiry date — expirationDate is null in the parsed info.
+        $mockInfo = new class {
+            public ?int $expirationDate = null;
+        };
+
+        $service = new class ($mockInfo) extends WhoisService {
+            public function __construct(private readonly mixed $info) {}
+
+            protected function loadDomainInfo(string $domain): mixed
+            {
+                return $this->info;
+            }
+        };
+
+        $this->assertNull($service->getExpiryDate('example.es'));
+    }
+
+    public function test_returns_null_when_whois_response_is_empty(): void
+    {
+        // Simulates WHOIS returning null info (domain not found or registry silent).
+        $service = new class extends WhoisService {
+            protected function loadDomainInfo(string $domain): mixed
+            {
+                return null;
+            }
+        };
+
+        $this->assertNull($service->getExpiryDate('unknown.es'));
+    }
 }

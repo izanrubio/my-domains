@@ -10,8 +10,7 @@ class WhoisService
     public function getExpiryDate(string $domain): ?Carbon
     {
         try {
-            $whois = Factory::get()->createWhois();
-            $info = $whois->loadDomainInfo($domain);
+            $info = $this->loadDomainInfo($domain);
 
             if ($info === null || $info->expirationDate === null) {
                 return null;
@@ -21,5 +20,10 @@ class WhoisService
         } catch (\Throwable) {
             return null;
         }
+    }
+
+    protected function loadDomainInfo(string $domain): mixed
+    {
+        return Factory::get()->createWhois()->loadDomainInfo($domain);
     }
 }

@@ -157,6 +157,24 @@ function AddDnsRow({ domainId, onAdded }) {
   )
 }
 
+// whoisResult: { type: 'success' | 'no-date' | 'error', text: string } | null
+function WhoisBanner({ result }) {
+  if (!result) return null
+  const styles = {
+    success: 'bg-green-50 text-green-700',
+    'no-date': 'bg-amber-50 text-amber-700',
+    error: 'bg-red-50 text-red-700',
+  }
+  return (
+    <div
+      role={result.type === 'error' ? 'alert' : 'status'}
+      className={`text-sm rounded-lg p-3 ${styles[result.type]}`}
+    >
+      {result.text}
+    </div>
+  )
+}
+
 export default function DomainDetail() {
   const { id } = useParams()
   const [domain, setDomain] = useState(null)
@@ -166,8 +184,9 @@ export default function DomainDetail() {
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState({})
   const [saving, setSaving] = useState(false)
+  const [saveMsg, setSaveMsg] = useState('')
   const [whoisLoading, setWhoisLoading] = useState(false)
-  const [msg, setMsg] = useState('')
+  const [whoisResult, setWhoisResult] = useState(null)
 
   const fetchDomain = async () => {
     const { data } = await client.get(`/domains/${id}`)
@@ -193,7 +212,7 @@ export default function DomainDetail() {
   const handleSave = async (e) => {
     e.preventDefault()
     setSaving(true)
-    setMsg('')
+    setSaveMsg('')
     try {
       const { data } = await client.put(`/domains/${id}`, {
         expires_at: form.expires_at || null,
@@ -203,9 +222,9 @@ export default function DomainDetail() {
       })
       setDomain(data)
       setEditing(false)
-      setMsg('Saved.')
+      setSaveMsg('Saved.')
     } catch {
-      setMsg('Save failed.')
+      setSaveMsg('Save failed.')
     } finally {
       setSaving(false)
     }
@@ -213,14 +232,28 @@ export default function DomainDetail() {
 
   const handleWhois = async () => {
     setWhoisLoading(true)
-    setMsg('')
+    setWhoisResult(null)
     try {
       const { data } = await client.post(`/domains/${id}/whois`)
       setDomain(data)
       setForm((f) => ({ ...f, expires_at: data.expires_at ?? '' }))
-      setMsg('Expiry updated from WHOIS.')
-    } catch {
-      setMsg('WHOIS lookup failed — date not found.')
+      setWhoisResult({
+        type: 'success',
+        text: `Expiry updated from WHOIS: ${new Date(data.expires_at).toLocaleDateString()}.`,
+      })
+    } catch (err) {
+      if (err.response?.status === 422) {
+        setWhoisResult({
+          type: 'no-date',
+          text: "Couldn't read the expiry date from WHOIS for this domain. Enter it manually below.",
+        })
+        setEditing(true)
+      } else {
+        setWhoisResult({
+          type: 'error',
+          text: 'WHOIS lookup failed. Check your network connection and try again.',
+        })
+      }
     } finally {
       setWhoisLoading(false)
     }
@@ -242,19 +275,32 @@ export default function DomainDetail() {
         </div>
       </div>
 
-      {msg && <p className="text-sm text-gray-600">{msg}</p>}
+      {saveMsg && <p className="text-sm text-gray-600">{saveMsg}</p>}
 
       {/* Domain info / edit */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-semibold text-gray-800">Domain info</h2>
           {!editing && (
-            <button onClick={() => setEditing(true)} className="text-sm text-blue-600 hover:underline">Edit</button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleWhois}
+                disabled={whoisLoading}
+                className="text-sm text-purple-600 border border-purple-300 px-3 py-1.5 rounded-lg hover:bg-purple-50 disabled:opacity-60 transition-colors"
+              >
+                {whoisLoading ? 'Detecting…' : 'Detect expiry (WHOIS)'}
+              </button>
+              <button onClick={() => setEditing(true)} className="text-sm text-blue-600 hover:underline">
+                Edit
+              </button>
+            </div>
           )}
         </div>
 
+        <WhoisBanner result={whoisResult} />
+
         {editing ? (
-          <form onSubmit={handleSave} className="space-y-4">
+          <form onSubmit={handleSave} className="space-y-4 mt-4">
             <div>
               <label htmlFor="expires_at" className="block text-sm font-medium text-gray-700 mb-1">Expiry date</label>
               <input
@@ -289,18 +335,10 @@ export default function DomainDetail() {
                 {saving ? 'Saving…' : 'Save'}
               </button>
               <button type="button" onClick={() => setEditing(false)} className="text-sm text-gray-600 hover:underline">Cancel</button>
-              <button
-                type="button"
-                onClick={handleWhois}
-                disabled={whoisLoading}
-                className="ml-auto text-sm text-purple-600 border border-purple-300 px-3 py-2 rounded-lg hover:bg-purple-50 disabled:opacity-60"
-              >
-                {whoisLoading ? 'Detecting…' : 'Detect expiry (WHOIS)'}
-              </button>
             </div>
           </form>
         ) : (
-          <dl className="grid grid-cols-2 gap-4 text-sm">
+          <dl className="grid grid-cols-2 gap-4 text-sm mt-4">
             <div>
               <dt className="text-gray-500">Expires</dt>
               <dd className="font-medium text-gray-800 mt-0.5">
