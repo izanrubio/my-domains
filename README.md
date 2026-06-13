@@ -1,58 +1,120 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# My Domains
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Full-stack domain management app. Backend: **Laravel 13** API (Sanctum token auth). Frontend: **React 19 SPA** (Vite + Tailwind CSS 4).
 
-## About Laravel
+Features: Cloudflare zone sync, WHOIS expiry detection, DNS record CRUD, expiry alerts by email.
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+---
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## Requirements
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+- PHP 8.3+, Composer
+- Node 20+, npm
+- SQLite (dev) or MySQL (production)
 
-## Learning Laravel
+---
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
-
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
-
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
-
-## Agentic Development
-
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
+## Backend setup
 
 ```bash
-composer require laravel/boost --dev
+cp .env.example .env
+php artisan key:generate
 
-php artisan boost:install
+# SQLite (dev):
+touch database/database.sqlite
+
+# MySQL (prod): fill DB_* in .env, then:
+# php artisan migrate
+
+php artisan migrate
+php artisan serve          # runs on localhost:8000
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+### Key `.env` vars
 
-## Contributing
+| Variable | Description |
+|---|---|
+| `CLOUDFLARE_API_TOKEN` | Global fallback CF token (per-user token in Settings takes precedence) |
+| `SANCTUM_STATEFUL_DOMAINS` | `localhost:5173,localhost:3000` for local dev |
+| `MAIL_*` | SMTP config for expiry alert emails |
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+### Artisan commands
 
-## Code of Conduct
+```bash
+php artisan domains:sync              # sync zones + DNS from Cloudflare
+php artisan domains:check-expiry      # send expiry alert emails (scheduled daily 08:00)
+```
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+The scheduler runs `check-expiry` automatically. To enable it, add to crontab:
+```
+* * * * * cd /path/to/project && php artisan schedule:run >> /dev/null 2>&1
+```
 
-## Security Vulnerabilities
+### Backend tests
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+```bash
+php artisan test
+```
 
-## License
+---
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+## Frontend setup
+
+```bash
+cd frontend
+cp .env.example .env        # set VITE_API_URL=http://localhost:8000/api
+npm install
+npm run dev                 # dev server on localhost:5173
+```
+
+### `.env` vars
+
+| Variable | Default | Description |
+|---|---|---|
+| `VITE_API_URL` | `http://localhost:8000/api` | Backend API base URL |
+
+### Frontend tests
+
+```bash
+cd frontend
+npm run test
+```
+
+### Build for production
+
+```bash
+cd frontend
+npm run build               # outputs to frontend/dist/
+```
+
+Serve `frontend/dist/` via any static host (Nginx, Cloudflare Pages, etc.). Point the backend `APP_URL` and CORS config to the production origin.
+
+---
+
+## Architecture
+
+```
+my-domains/
+├── app/
+│   ├── Console/Commands/       # domains:sync, domains:check-expiry
+│   ├── Http/Controllers/Api/   # Auth, Domain, Dns, Setting
+│   ├── Http/Requests/          # Form requests with DNS type validation
+│   ├── Mail/                   # DomainExpiryAlert mailable
+│   ├── Models/                 # User, Setting (encrypted CF token), Domain, DnsRecord
+│   └── Services/               # CloudflareService, WhoisService
+├── frontend/
+│   └── src/
+│       ├── api/client.js       # axios + auth interceptor
+│       ├── contexts/           # AuthContext (token in localStorage)
+│       ├── pages/              # Login, Dashboard, Domains, DomainDetail, Settings
+│       └── utils/expiry.js     # color-coding helpers (< 7d red, < 30d orange, green)
+└── routes/api.php              # REST endpoints under /api
+```
+
+## Auth flow
+
+Login returns a Bearer token → stored in `localStorage` → added to every request via axios interceptor. 401 responses clear the token and redirect to `/login`.
+
+## DNS cache sync
+
+Every DNS write (create / update / delete) through the API updates the local `dns_records` table in the same request, so the UI never drifts from Cloudflare.
