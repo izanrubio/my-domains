@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Carbon\Carbon;
 
 class Domain extends Model
@@ -31,6 +32,16 @@ class Domain extends Model
     public function dnsRecords(): HasMany
     {
         return $this->hasMany(DnsRecord::class);
+    }
+
+    public function scans(): HasMany
+    {
+        return $this->hasMany(Scan::class);
+    }
+
+    public function latestScan(): HasOne
+    {
+        return $this->hasOne(Scan::class)->latestOfMany();
     }
 
     public function getDaysUntilExpiryAttribute(): ?int
