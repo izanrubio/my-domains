@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Services\Scanning\Checks\DnsCheck;
+use App\Services\Scanning\Checks\EmailSecurityCheck;
 use App\Services\Scanning\Checks\SslCheck;
 use App\Services\Scanning\Contracts\CertFetcherInterface;
 use App\Services\Scanning\Contracts\DohResolverInterface;
@@ -22,6 +23,7 @@ class AppServiceProvider extends ServiceProvider
             return new DomainScanner([
                 $app->make(DnsCheck::class),
                 $app->make(SslCheck::class),
+                $app->make(EmailSecurityCheck::class),
             ]);
         });
     }
